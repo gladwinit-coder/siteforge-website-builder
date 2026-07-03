@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -67,4 +69,4 @@ export default async function DashboardPage() {
       </div>
     </div>
   );
-                                                 }
+          }
