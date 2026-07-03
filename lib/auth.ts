@@ -14,47 +14,49 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
         try {
           const { connectDB } = await import("./db");
-          await connectDB();
+          const conn = await connectDB();
 
-          // Use mongoose directly to bypass select:false restriction
-          const mongoose = (await import("mongoose")).default;
-          const UserModel = mongoose.models.User || 
-            (await import("@/models/User") as any).default;
+          // Use native MongoDB driver to bypass Mongoose select:false
+          const db = conn.connection.db;
+          const user = await db.collection("users").findOne(
+            { email: String(credentials.email).toLowerCase().trim() },
+            { projection: { _id: 1, name: 1, email: 1, password: 1, role: 1, isActive: 1 } }
+          );
 
-          // Explicitly select password field
-          const user = await UserModel
-            .findOne({ email: String(credentials.email).toLowerCase() })
-            .select("name email password role isActive")
-            .lean();
-
-          if (!user || !user.password) {
-            console.log("User not found or no password:", credentials.email);
+          if (!user) {
+            console.log("[Auth] User not found:", credentials.email);
             return null;
           }
 
           if (!user.isActive) {
-            console.log("User inactive:", credentials.email);
+            console.log("[Auth] User inactive:", credentials.email);
+            return null;
+          }
+
+          if (!user.password) {
+            console.log("[Auth] No password stored for:", credentials.email);
             return null;
           }
 
           const valid = await bcrypt.compare(
-            String(credentials.password), 
-            user.password
+            String(credentials.password),
+            String(user.password)
           );
-          
+
           if (!valid) {
-            console.log("Invalid password for:", credentials.email);
+            console.log("[Auth] Wrong password for:", credentials.email);
             return null;
           }
 
+          console.log("[Auth] Login success:", credentials.email);
           return {
             id: user._id.toString(),
             email: user.email,
-            name: user.name,
-            role: user.role,
+            name: user.name || "User",
+            role: user.role || "user",
           };
         } catch (error) {
-          console.error("Auth error:", error);
+          console.error("[Auth] Error:", error);
           return null;
         }
       },
