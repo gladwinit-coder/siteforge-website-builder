@@ -1,4 +1,4 @@
-// Vercel Deployment API — programmatic static site deploy
+import { createHash } from "crypto";
 
 export async function deployToVercel({ files, domainName, projectName }: {
   files: Record<string, string>;
@@ -9,15 +9,23 @@ export async function deployToVercel({ files, domainName, projectName }: {
   const teamId = process.env.VERCEL_TEAM_ID;
   const base = "https://api.vercel.com";
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const qs = teamId ? `?teamId=${teamId}` : "";
 
   // Step 1: Upload all files
   const fileUploads = await Promise.all(
     Object.entries(files).map(async ([filename, content]) => {
       const body = Buffer.from(content, "utf-8");
-      const sha = await sha1(body);
+      // Use Node.js crypto (not browser crypto.subtle)
+      const sha = createHash("sha1").update(body).digest("hex");
+      
       await fetch(`${base}/v2/files`, {
         method: "POST",
-        headers: { ...headers, "Content-Type": "application/octet-stream", "x-vercel-digest": sha },
+        headers: {
+          ...headers,
+          "Content-Type": "application/octet-stream",
+          "x-vercel-digest": sha,
+          "Content-Length": String(body.length),
+        },
         body,
       });
       return { file: filename, sha, size: body.length };
@@ -25,7 +33,6 @@ export async function deployToVercel({ files, domainName, projectName }: {
   );
 
   // Step 2: Create deployment
-  const qs = teamId ? `?teamId=${teamId}` : "";
   const deployRes = await fetch(`${base}/v13/deployments${qs}`, {
     method: "POST",
     headers,
@@ -45,16 +52,6 @@ export async function deployToVercel({ files, domainName, projectName }: {
     headers,
     body: JSON.stringify({ name: domainName }),
   });
-  await fetch(`${base}/v10/projects/${projectName}/domains${qs}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ name: `www.${domainName}` }),
-  });
 
   return { id: deployment.id, url: deployment.url };
 }
-
-async function sha1(data: Buffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest("SHA-1", data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-        }
