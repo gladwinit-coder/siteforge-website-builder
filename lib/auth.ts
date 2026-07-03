@@ -1,4 +1,4 @@
-import NextAuth, { type NextAuthOptions } from "next-auth";
+import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
@@ -20,7 +20,12 @@ export const authOptions: NextAuthOptions = {
           if (!user) return null;
           const valid = await bcrypt.compare(credentials.password as string, user.password);
           if (!valid) return null;
-          return { id: user._id.toString(), email: user.email, name: user.name, role: user.role };
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          };
         } catch (error) {
           console.error("Auth error:", error);
           return null;
@@ -48,7 +53,3 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
 };
-
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
-export default handler;
