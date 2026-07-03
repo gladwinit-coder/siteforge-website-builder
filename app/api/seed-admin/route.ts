@@ -2,46 +2,37 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
-  // Security: only allow in non-production or with secret key
-  const adminEmail = process.env.ADMIN_EMAIL || "gladwin@mitsumi.ae";
+  const adminEmail = process.env.ADMIN_EMAIL || "gladwin.it@gmail.com";
   const adminPassword = process.env.ADMIN_INITIAL_PASSWORD || "SiteForge@Admin2025!";
 
   try {
     const { connectDB } = await import("@/lib/db");
-    const UserModule = await import("@/models/User") as any;
-    const User = UserModule.default;
+    const conn = await connectDB();
+    const db = conn.connection.db;
+    const users = db.collection("users");
 
-    await connectDB();
+    // Delete any old admin with old email
+    await users.deleteMany({ email: { $in: ["gladwin@mitsumi.ae", "gladwin.it@gmail.com"] } });
 
-    // Check if admin already exists
-    const existing = await User.findOne({ email: adminEmail });
-    if (existing) {
-      return NextResponse.json({ 
-        success: false, 
-        message: "Admin user already exists: " + adminEmail 
-      });
-    }
-
-    // Hash password and create admin
-    const hashedPassword = await bcrypt.hash(adminPassword, 12);
-    await User.create({
+    // Hash and create fresh admin
+    const hashed = await bcrypt.hash(adminPassword, 12);
+    await users.insertOne({
       name: "Gladwin Admin",
       email: adminEmail,
-      password: hashedPassword,
+      password: hashed,
       role: "admin",
       isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Admin created: " + adminEmail,
-      loginWith: adminEmail,
-      password: adminPassword
+    return NextResponse.json({
+      success: true,
+      message: "Admin user created",
+      email: adminEmail,
+      password: adminPassword,
     });
-  } catch (error: any) {
-    return NextResponse.json({ 
-      success: false, 
-      error: error.message 
-    }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
