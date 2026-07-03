@@ -14,8 +14,11 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
         try {
           const { connectDB } = await import("./db");
-          const { default: User } = await import("@/models/User");
           await connectDB();
+          // Dynamic import with any cast to avoid TS union type error
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const UserModule = await import("@/models/User") as any;
+          const User = UserModule.default;
           const user = await User.findOne({ email: credentials.email }).select("+password");
           if (!user) return null;
           const valid = await bcrypt.compare(credentials.password as string, user.password);
@@ -34,17 +37,19 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user }: any) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
+        token.role = user.role;
       }
       return token;
     },
-    async session({ session, token }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: any) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
+        session.user.id = token.id;
+        session.user.role = token.role;
       }
       return session;
     },
