@@ -15,14 +15,38 @@ export const authOptions: NextAuthOptions = {
         try {
           const { connectDB } = await import("./db");
           await connectDB();
-          // Dynamic import with any cast to avoid TS union type error
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const UserModule = await import("@/models/User") as any;
-          const User = UserModule.default;
-          const user = await User.findOne({ email: credentials.email }).select("+password");
-          if (!user) return null;
-          const valid = await bcrypt.compare(credentials.password as string, user.password);
-          if (!valid) return null;
+
+          // Use mongoose directly to bypass select:false restriction
+          const mongoose = (await import("mongoose")).default;
+          const UserModel = mongoose.models.User || 
+            (await import("@/models/User") as any).default;
+
+          // Explicitly select password field
+          const user = await UserModel
+            .findOne({ email: String(credentials.email).toLowerCase() })
+            .select("name email password role isActive")
+            .lean();
+
+          if (!user || !user.password) {
+            console.log("User not found or no password:", credentials.email);
+            return null;
+          }
+
+          if (!user.isActive) {
+            console.log("User inactive:", credentials.email);
+            return null;
+          }
+
+          const valid = await bcrypt.compare(
+            String(credentials.password), 
+            user.password
+          );
+          
+          if (!valid) {
+            console.log("Invalid password for:", credentials.email);
+            return null;
+          }
+
           return {
             id: user._id.toString(),
             email: user.email,
@@ -37,19 +61,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async jwt({ token, user }: any) {
+    async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role;
+        token.id = (user as any).id;
+        token.role = (user as any).role;
       }
       return token;
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async session({ session, token }: any) {
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id;
-        session.user.role = token.role;
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
       }
       return session;
     },
