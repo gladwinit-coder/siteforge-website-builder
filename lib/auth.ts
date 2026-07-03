@@ -1,8 +1,8 @@
-import NextAuth from "next-auth";
+import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -13,7 +13,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         try {
-          // Dynamic import to avoid build-time mongoose connection
           const { connectDB } = await import("./db");
           const { default: User } = await import("@/models/User");
           await connectDB();
@@ -47,4 +46,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: { signIn: "/login", error: "/login" },
   session: { strategy: "jwt" },
-});
+  secret: process.env.NEXTAUTH_SECRET,
+};
+
+const handler = NextAuth(authOptions);
+export { handler as GET, handler as POST };
+export default handler;
